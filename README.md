@@ -32,3 +32,45 @@ In a separate terminal:
 ```bash
 npx react-native run-android
 ```
+npx react-native run-android
+```
+
+## Agent Architecture
+
+This application uses a multi-agent system orchestrator pattern powered by **LangGraph** and **Ollama (Gemma 3 1B)**.
+
+### Architecture Flow
+
+```mermaid
+graph TD
+    User((User Input)) --> Orchestrator[Orchestrator Agent]
+    
+    Orchestrator -->|Classifies Intent| Routing{Routing Logic}
+    
+    Routing -->|NAVIGATION| NavAgent[Navigation Agent]
+    Routing -->|TRANSACTION| TransAgent[Transaction Agent]
+    Routing -->|HISTORY| HistAgent[History Agent]
+    Routing -->|GENERAL| GenAgent[General Agent]
+    
+    NavAgent -->|Calls| NavTool[navigateToScreen]
+    TransAgent -->|Calls| SendTool[sendMoney]
+    HistAgent -->|Calls| BalTool[checkBalance]
+    HistAgent -->|Calls| HistTool[getRecentTransactions]
+    
+    NavTool --> Result(Action Result)
+    SendTool --> Result
+    BalTool --> Result
+    HistTool --> Result
+    GenAgent --> Result
+    
+    Result --> Response[Final Response]
+```
+
+### Components
+1.  **Orchestrator**: Classifies user intent into distinct categories.
+2.  **Specialized Agents**: 
+    - **Navigation**: Handles screen transitions.
+    - **Transaction**: Manages payments and transfers.
+    - **History**: Queries balances and past transactions.
+    - **General**: Handles chit-chat and fallback queries.
+3.  **Local "Brain"**: Uses `Ollama` running `gemma3:1b` locally for privacy and offline capability.

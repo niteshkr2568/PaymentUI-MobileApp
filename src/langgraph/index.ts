@@ -1,6 +1,6 @@
 import { StateGraph, MessagesAnnotation } from "@langchain/langgraph";
 import { ToolNode } from "@langchain/langgraph/dist/prebuilt/index";
-import { ChatOllama } from "@langchain/ollama";
+import { CustomChatOllama } from "./CustomChatOllama";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { createTools } from "./tools";
 
@@ -24,13 +24,14 @@ export const createAgentGraph = (context: any) => {
     // Android Emulator: "http://10.0.2.2:11434" (Loopback to Host)
     // Physical Device: "http://<YOUR_PC_IP>:11434" (REQUIRED for Real Device, e.g. "http://192.168.1.5:11434")
     // CHECK YOUR PC IP with `ifconfig` (Mac/Linux) or `ipconfig` (Windows)
-    const OLLAMA_BASE_URL = "http://192.168.1.5:11434"; // Auto-detected LAN IP
+    const OLLAMA_BASE_URL = "http://localhost:11434"; // Using adb reverse
     // END_CONFIG
 
-    const model = new ChatOllama({
+    const model = new CustomChatOllama({
         model: "gemma3:1b", // User asked to use Ollama
         baseUrl: OLLAMA_BASE_URL,
         temperature: 0,
+        streaming: false,
     });
 
     // 3. Nodes
@@ -40,8 +41,12 @@ export const createAgentGraph = (context: any) => {
     const orchestratorNode = async (state: typeof State.State) => {
         const { messages } = state;
         const systemPrompt = new SystemMessage(
-            "You are an Orchestrator. Your job is to classify the user's intent into one of the following categories: 'NAVIGATION', 'TRANSACTION', 'HISTORY', or 'GENERAL'.\n" +
-            "Do not answer the user's question directly. Just output the category name."
+            "You are an Orchestrator for a Payment App. Your ONLY job is to classify the user's intent into one of these exact categories:\n" +
+            "- 'NAVIGATION': moving between screens (e.g., go to, open, show)\n" +
+            "- 'TRANSACTION': sending money or paying (e.g., pay, send, transfer)\n" +
+            "- 'HISTORY': checking data (e.g., balance, transactions, history, what did I spend)\n" +
+            "- 'GENERAL': greetings, questions, or unclear requests\n\n" +
+            "Output ONLY the category name. Do not explain."
         );
 
         // We only want the last message for classification, plus maybe context?
@@ -70,13 +75,13 @@ export const createAgentGraph = (context: any) => {
     };
 
     const navigationAgent = (state: typeof State.State) =>
-        runAgent(state, navigationTools, "You are a Navigation Agent. Help the user navigate using the available tools.");
+        runAgent(state, navigationTools, "You are a Navigation Agent. You help users navigate the app. Use 'navigateToScreen' to change screens. Known screens: Home, Dashboard, History, Wallet, Profile, Settings, SendMoney.");
 
     const transactionAgent = (state: typeof State.State) =>
-        runAgent(state, transactionTools, "You are a Transaction Agent. Help the user send money using the available tools.");
+        runAgent(state, transactionTools, "You are a Transaction Agent. You help users send money. Use 'sendMoney'. confirm the amount and recipient from the user's message before calling the tool. If details are missing, ask for them.");
 
     const historyAgent = (state: typeof State.State) =>
-        runAgent(state, historyTools, "You are a History/Data Agent. Help the user check balance or transactions.");
+        runAgent(state, historyTools, "You are a History Agent. You can check balances and transaction history. Use 'checkBalance' for current funds and 'getRecentTransactions' for past activity. You can filter transactions by 'income' or 'expense'.");
 
     const generalAgent = async (state: typeof State.State) => {
         const { messages } = state;
